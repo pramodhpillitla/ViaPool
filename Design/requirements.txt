@@ -1,0 +1,40 @@
+Requirements of Driver: 
+
+    1. Post his details like 
+        i. start location
+        ii. Destination
+        iii. Time
+        iv. seats available
+        v. Price
+    2. Upload his documents
+        i. License
+        ii. RC & Vehicle documents
+    3. Preferences
+        i. allowing pets
+        ii. male/female passengers only
+    4. Routing to Destination / Map
+    5. Display details of passengers who want to go the same Destination
+    6. payment details
+        i. paid
+        ii. mark as paid
+    7. Communication channel with the passengers
+    8. Reject/Accept passengers
+    9. Display trip details like avg speed, stops
+
+    
+
+
+Requirements of Passengers: 
+    1. Book a ride 
+        i. Current location
+        ii. Destination location
+    2. view driver details
+    3. make payments
+    4. cancel rides
+    5. real time tracking of drivers on the maps
+    6. Communication with the driver
+    7. Preferences like experience of dricer , car types, Price
+
+1. Ratings & reviews
+2. Safety features
+3. Notifications
