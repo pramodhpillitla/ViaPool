@@ -38,3 +38,22 @@ Requirements of Passengers:
 1. Ratings & reviews
 2. Safety features
 3. Notifications
+
+# mongodb credentials
+
+Username
+pramodhpillitla_db_user
+Password
+Vniqu0eorvifZKXo
+
+# monogdb uri
+mongodb+srv://pramodhpillitla_db_user:Vniqu0eorvifZKXo@viapool-dev.apraylb.mongodb.net/?appName=viapool-dev
+
+#installations 
+npm i 
+express
+mongodb
+mongoose
+jsonwebtoken
+bcrypt
+cors
