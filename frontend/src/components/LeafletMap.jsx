@@ -2,7 +2,7 @@ import React, { useEffect, useMemo } from "react";
 import { CircleMarker, MapContainer, Marker, Polyline, TileLayer, Tooltip, useMap } from "react-leaflet";
 import L from "leaflet";
 import { renderToStaticMarkup } from "react-dom/server";
-import { CarFront, Flag, UserRound } from "lucide-react";
+import { CarFront, Flag, MapPin, UserRound } from "lucide-react";
 import "leaflet/dist/leaflet.css";
 
 import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
@@ -35,6 +35,8 @@ function buildMarkerIcon(Icon, color, iconColor = "#ffffff") {
 
 const driverIcon = buildMarkerIcon(CarFront, "#2d6ea3");
 const passengerIcon = buildMarkerIcon(UserRound, "#c4622d");
+const pickupIcon = buildMarkerIcon(MapPin, "#d98a3a");
+const startIcon = buildMarkerIcon(MapPin, "#8a5a2b");
 const destinationIcon = buildMarkerIcon(Flag, "#2d4a35");
 
 function FitMapToPoints({ points, center, zoom }) {
@@ -62,6 +64,8 @@ export default function LeafletMap({
   markerCoords,
   driverCoords,
   passengerCoords,
+  pickupCoords,
+  startCoords,
   destinationCoords,
   routePath = [],
   showMarkerLabels = false,
@@ -102,8 +106,15 @@ export default function LeafletMap({
     [displayDriverCoords, displayPassengerCoords]
   );
   const points = useMemo(
-    () => [displayDriverCoords, displayPassengerCoords, destinationCoords].filter(Boolean),
-    [displayDriverCoords, displayPassengerCoords, destinationCoords]
+    () =>
+      [
+        displayDriverCoords,
+        displayPassengerCoords,
+        pickupCoords,
+        startCoords,
+        destinationCoords,
+      ].filter(Boolean),
+    [displayDriverCoords, displayPassengerCoords, pickupCoords, startCoords, destinationCoords]
   );
 
   return (
@@ -176,6 +187,33 @@ export default function LeafletMap({
             )}
           </Marker>
         </>
+      )}
+
+      {!displayPassengerCoords && pickupCoords && (
+        <>
+          <CircleMarker
+            center={[pickupCoords.lat, pickupCoords.lng]}
+            radius={14}
+            pathOptions={{ color: "#d98a3a", weight: 2, fillColor: "#d98a3a", fillOpacity: 0.1 }}
+          />
+          <Marker position={[pickupCoords.lat, pickupCoords.lng]} icon={pickupIcon} zIndexOffset={1050}>
+            {showMarkerLabels && (
+              <Tooltip direction="top" offset={[0, -42]} permanent>
+                Pickup
+              </Tooltip>
+            )}
+          </Marker>
+        </>
+      )}
+
+      {startCoords && (
+        <Marker position={[startCoords.lat, startCoords.lng]} icon={startIcon} zIndexOffset={850}>
+          {showMarkerLabels && (
+            <Tooltip direction="top" offset={[0, -42]} permanent>
+              Start
+            </Tooltip>
+          )}
+        </Marker>
       )}
 
       {destinationCoords && (

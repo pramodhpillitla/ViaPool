@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowRight, Map, Star } from "lucide-react";
-import api from "../lib/api";
+import api, { setAuthSession } from "../lib/api";
 import "./Auth.css";
 
 const EyeIcon = ({ open }) =>
@@ -58,15 +58,14 @@ export default function Login() {
       });
 
       const user = res?.data?.user;
-      const token = res?.data?.accessToken;
+      const accessToken = res?.data?.accessToken;
+      const refreshToken = res?.data?.refreshToken;
 
-      if (!user || !token) {
+      if (!user || !accessToken || !refreshToken) {
         throw new Error("Invalid login response from server");
       }
 
-      localStorage.setItem("via-token", token);
-      localStorage.setItem("via-user", JSON.stringify(user));
-      localStorage.setItem("via-role", user.role);
+      setAuthSession({ accessToken, refreshToken, user });
 
       setLoading(false);
       if (user?.role === "driver") navigate("/driver/dashboard");

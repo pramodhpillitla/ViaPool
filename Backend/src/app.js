@@ -1,16 +1,33 @@
 import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
+import { getAllowedOrigins, isOriginAllowed } from "./utils/cors.js";
 
 const app = express();
 
-app.use(cors({
-    origin: function (origin, callback) {
-        callback(null, true);
-    },
-    credentials: true,
-    optionsSuccessStatus: 200
-}));
+app.use(
+    cors({
+        origin(origin, callback) {
+            if (isOriginAllowed(origin)) {
+                callback(null, true);
+                return;
+            }
+
+            callback(new Error(`Origin ${origin} not allowed by CORS`));
+        },
+        credentials: true,
+        optionsSuccessStatus: 200
+    })
+);
+
+app.use((req, res, next) => {
+    const origin = req.headers.origin;
+    if (isOriginAllowed(origin)) {
+        res.header("Vary", "Origin");
+        res.header("Access-Control-Allow-Credentials", "true");
+    }
+    next();
+});
 
 app.use(express.json({ limit: "16kb" }));
 app.use(express.urlencoded({ extended: true, limit: "16kb" }));
@@ -34,7 +51,8 @@ import sosRouter from './routes/sos.routes.js';
 app.get("/health", (req, res) => {
     res.status(200).json({
         success: true,
-        message: "ViaPool backend is healthy"
+        message: "ViaPool backend is healthy",
+        allowedOrigins: getAllowedOrigins(),
     });
 });
 

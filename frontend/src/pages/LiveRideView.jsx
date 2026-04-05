@@ -3,7 +3,20 @@ import { io } from "socket.io-client";
 import api, { API_URL } from "../lib/api";
 import { logger } from "../lib/logger";
 import { useParams, useNavigate } from "react-router-dom";
-import { Check, Circle, User, AlertTriangle, ArrowRight, Clock, Gauge, Car, CarFront, Flag, UserRound } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowRight,
+  Car,
+  CarFront,
+  Check,
+  Circle,
+  Clock,
+  Flag,
+  Gauge,
+  MapPin,
+  User,
+  UserRound,
+} from "lucide-react";
 import AppShell from "../components/AppShell";
 import LeafletMap from "../components/LeafletMap";
 import ConfirmDialog from "../components/ui/ConfirmDialog";
@@ -11,6 +24,23 @@ import StatusNotice from "../components/ui/StatusNotice";
 import "../pages/AppShell.css";
 
 const DEFAULT_COORDS = { lat: 20.5937, lng: 78.9629 };
+
+const toLatLng = (pointLike) => {
+  if (!pointLike) return null;
+
+  const coords =
+    (Array.isArray(pointLike?.location?.coordinates) &&
+      pointLike.location.coordinates) ||
+    (Array.isArray(pointLike?.coordinates) && pointLike.coordinates) ||
+    null;
+
+  if (!coords || coords.length !== 2) return null;
+
+  const [lng, lat] = coords;
+  if (typeof lat !== "number" || typeof lng !== "number") return null;
+
+  return { lat, lng };
+};
 
 export default function LiveRideView() {
   const { rideId } = useParams();
@@ -22,6 +52,8 @@ export default function LiveRideView() {
   const [socket, setSocket] = useState(null);
   const [driverCoords, setDriverCoords] = useState(DEFAULT_COORDS);
   const [passengerCoords, setPassengerCoords] = useState(null);
+  const [pickupCoords, setPickupCoords] = useState(null);
+  const [startCoords, setStartCoords] = useState(null);
   const [destinationCoords, setDestinationCoords] = useState(null);
   const [isMoving, setIsMoving] = useState(false);
   const [notice, setNotice] = useState(null);
@@ -34,32 +66,28 @@ export default function LiveRideView() {
       try {
         const [rideRes, passengerRes] = await Promise.all([
           api.get(`/api/v1/rides/${rideId}`),
-          api.get(`/api/v1/bookings/${rideId}/passengers`)
+          api.get(`/api/v1/bookings/${rideId}/passengers`),
         ]);
 
         const rideData = rideRes.data;
         setRide(rideData);
 
-        if (rideData.from?.location?.coordinates?.length === 2) {
-          setDriverCoords({
-            lat: rideData.from.location.coordinates[1],
-            lng: rideData.from.location.coordinates[0],
-          });
+        const rideStart = toLatLng(rideData.from);
+        if (rideStart) {
+          setStartCoords(rideStart);
+          setDriverCoords(rideStart);
         }
 
-        if (rideData.to?.location?.coordinates?.length === 2) {
-          setDestinationCoords({
-            lat: rideData.to.location.coordinates[1],
-            lng: rideData.to.location.coordinates[0],
-          });
+        const rideDestination = toLatLng(rideData.to);
+        if (rideDestination) {
+          setDestinationCoords(rideDestination);
         }
 
-        const firstPassenger = (passengerRes.data || []).find((booking) => booking.pickupPoint?.coordinates?.length === 2);
+        const firstPassenger = (passengerRes.data || []).find((booking) =>
+          toLatLng(booking.pickupPoint),
+        );
         if (firstPassenger) {
-          setPassengerCoords({
-            lat: firstPassenger.pickupPoint.coordinates[1],
-            lng: firstPassenger.pickupPoint.coordinates[0],
-          });
+          setPickupCoords(toLatLng(firstPassenger.pickupPoint));
         }
       } catch (err) {
         logger.error("Failed to fetch live ride data", err);
@@ -72,7 +100,7 @@ export default function LiveRideView() {
       withCredentials: true,
       auth: {
         token: localStorage.getItem("via-token"),
-      }
+      },
     });
 
     newSocket.on("connect", () => {
@@ -112,7 +140,10 @@ export default function LiveRideView() {
         setDriverCoords({ lat, lng });
         setIsMoving(true);
 
-        if (typeof position.coords.speed === "number" && !Number.isNaN(position.coords.speed)) {
+        if (
+          typeof position.coords.speed === "number" &&
+          !Number.isNaN(position.coords.speed)
+        ) {
           setSpeed(Math.max(0, Math.round(position.coords.speed * 3.6)));
         }
 
@@ -126,7 +157,7 @@ export default function LiveRideView() {
         enableHighAccuracy: true,
         maximumAge: 5000,
         timeout: 10000,
-      }
+      },
     );
 
     return () => {
@@ -135,11 +166,16 @@ export default function LiveRideView() {
     };
   }, [ended, socket, rideId]);
 
-  const fmt = (seconds) => `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
+  const fmt = (seconds) =>
+    `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(
+      seconds % 60,
+    ).padStart(2, "0")}`;
 
-  const routePath = useMemo(() => {
-    return [driverCoords, passengerCoords, destinationCoords].filter(Boolean);
-  }, [driverCoords, passengerCoords, destinationCoords]);
+  const routePath = useMemo(
+    () =>
+      [startCoords, driverCoords, passengerCoords || pickupCoords, destinationCoords].filter(Boolean),
+    [startCoords, driverCoords, passengerCoords, pickupCoords, destinationCoords],
+  );
 
   const handleSOS = async () => {
     try {
@@ -149,7 +185,7 @@ export default function LiveRideView() {
         rideId,
         lat: driverCoords.lat,
         lng: driverCoords.lng,
-        message: "Driver triggered emergency SOS"
+        message: "Driver triggered emergency SOS",
       });
       setNotice({
         tone: "success",
@@ -195,84 +231,201 @@ export default function LiveRideView() {
       />
 
       <div className="page-header">
-        <div className="page-header-eyebrow" style={{ color: ended ? "var(--forest)" : "var(--terracotta)", display: "flex", alignItems: "center", gap: 6 }}>
-          {ended ? <><Check size={16} /> Ride Completed</> : <><Circle size={10} fill="var(--terracotta)" /> Live</>}
+        <div
+          className="page-header-eyebrow"
+          style={{
+            color: ended ? "var(--forest)" : "var(--terracotta)",
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+          }}
+        >
+          {ended ? (
+            <>
+              <Check size={16} /> Ride Completed
+            </>
+          ) : (
+            <>
+              <Circle size={10} fill="var(--terracotta)" /> Live
+            </>
+          )}
         </div>
         <h1 className="page-header-title">
-          {ride?.from?.address?.split(",")?.[0] || "..."} →
+          {ride?.from?.address?.split(",")?.[0] || "..."} to
           <em>{ride?.to?.address?.split(",")?.[0] || "..."}</em>
         </h1>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 300px", gap: 24 }}>
-        <div className="track-map" style={{ height: 400, borderRadius: 24, overflow: "hidden", position: "relative", zIndex: 1 }}>
+        <div
+          className="track-map"
+          style={{
+            height: 400,
+            borderRadius: 24,
+            overflow: "hidden",
+            position: "relative",
+            zIndex: 1,
+          }}
+        >
           <LeafletMap
             center={driverCoords}
             driverCoords={driverCoords}
             passengerCoords={passengerCoords}
+            pickupCoords={pickupCoords}
+            startCoords={startCoords}
             destinationCoords={destinationCoords}
             routePath={routePath}
+            showMarkerLabels
             zoom={15}
           />
           <div className="track-eta-banner" style={{ zIndex: 10 }}>
-            Driver live · {isMoving ? "Using current GPS" : "Waiting for location"} · Blue: driver · Orange: passenger · Green: destination
+            Driver live · {isMoving ? "Using current GPS" : "Waiting for location"} ·
+            Blue: driver · Orange: passenger live · Amber: pickup · Brown: start · Green: destination
           </div>
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <div className="info-card-dark" style={{ borderRadius: 20, padding: 24 }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 8 }}>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: 16,
+                marginBottom: 8,
+              }}
+            >
               {[
                 { label: "Elapsed", val: fmt(elapsed), icon: Clock },
                 { label: "Speed", val: `${speed} km/h`, icon: Gauge },
                 { label: "Vehicle", val: `${ride?.vehicle?.brand || "..."}`, icon: Car },
                 { label: "Seats", val: `${ride?.totalSeats || 0}`, icon: User },
               ].map((item) => (
-                <div key={item.label} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                  <div style={{ fontSize: "0.7rem", color: "rgba(245,240,232,0.4)", display: "flex", alignItems: "center", gap: 4 }}>
+                <div
+                  key={item.label}
+                  style={{ display: "flex", flexDirection: "column", gap: 4 }}
+                >
+                  <div
+                    style={{
+                      fontSize: "0.7rem",
+                      color: "rgba(245,240,232,0.4)",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 4,
+                    }}
+                  >
                     <item.icon size={10} /> {item.label}
                   </div>
-                  <div style={{ fontFamily: "var(--font-mono)", fontSize: "1.2rem", color: "var(--cream)" }}>{item.val}</div>
+                  <div
+                    style={{
+                      fontFamily: "var(--font-mono)",
+                      fontSize: "1.2rem",
+                      color: "var(--cream)",
+                    }}
+                  >
+                    {item.val}
+                  </div>
                 </div>
               ))}
             </div>
           </div>
 
           <div className="info-card">
-            <div style={{ fontSize: "0.78rem", color: "var(--mist)", marginBottom: 4 }}>Price per Seat</div>
-            <div style={{ fontFamily: "var(--font-serif)", fontSize: "2.4rem", color: "var(--ink)", letterSpacing: "-0.03em" }}>
+            <div style={{ fontSize: "0.78rem", color: "var(--mist)", marginBottom: 4 }}>
+              Price per Seat
+            </div>
+            <div
+              style={{
+                fontFamily: "var(--font-serif)",
+                fontSize: "2.4rem",
+                color: "var(--ink)",
+                letterSpacing: "-0.03em",
+              }}
+            >
               Rs.{ride?.pricePerSeat || 0}
             </div>
           </div>
 
           <div className="info-card">
-            <div style={{ fontSize: "0.8rem", color: "var(--mist)", marginBottom: 10 }}>Map Legend</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8, fontSize: "0.86rem", color: "var(--ink)" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}><CarFront size={14} color="#2d6ea3" /> Driver current location</div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}><UserRound size={14} color="#c4622d" /> Passenger location</div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}><Flag size={14} color="#2d4a35" /> Destination</div>
+            <div style={{ fontSize: "0.8rem", color: "var(--mist)", marginBottom: 10 }}>
+              Map Legend
+            </div>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 8,
+                fontSize: "0.86rem",
+                color: "var(--ink)",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <CarFront size={14} color="#2d6ea3" /> Driver current location
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <UserRound size={14} color="#c4622d" /> Passenger live location
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <MapPin size={14} color="#d98a3a" /> Passenger pickup point
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <MapPin size={14} color="#8a5a2b" /> Ride start point
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <Flag size={14} color="#2d4a35" /> Destination
+              </div>
             </div>
           </div>
 
           <button
             onClick={() => setShowSosDialog(true)}
             style={{
-              padding: "16px", borderRadius: 16, border: "2px solid rgba(196,98,45,0.3)",
-              background: "rgba(196,98,45,0.06)", cursor: "pointer", transition: "all 0.2s",
-              fontFamily: "var(--font-sans)", fontSize: "0.9rem", fontWeight: 700, color: "var(--terracotta)",
-              display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+              padding: "16px",
+              borderRadius: 16,
+              border: "2px solid rgba(196,98,45,0.3)",
+              background: "rgba(196,98,45,0.06)",
+              cursor: "pointer",
+              transition: "all 0.2s",
+              fontFamily: "var(--font-sans)",
+              fontSize: "0.9rem",
+              fontWeight: 700,
+              color: "var(--terracotta)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
             }}
           >
             <AlertTriangle size={20} /> Emergency SOS
           </button>
 
           {!ended ? (
-            <button className="auth-submit" onClick={handleEnd} disabled={endingRide} style={{ background: "var(--forest)", boxShadow: "0 8px 24px rgba(45,74,53,0.3)", display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
+            <button
+              className="auth-submit"
+              onClick={handleEnd}
+              disabled={endingRide}
+              style={{
+                background: "var(--forest)",
+                boxShadow: "0 8px 24px rgba(45,74,53,0.3)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 10,
+              }}
+            >
               {endingRide ? "Completing..." : "End Ride"} <Check size={20} />
             </button>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <button className="btn-primary" onClick={() => navigate("/driver/dashboard")} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
+              <button
+                className="btn-primary"
+                onClick={() => navigate("/driver/dashboard")}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 10,
+                }}
+              >
                 Back to Dashboard <ArrowRight size={18} />
               </button>
             </div>

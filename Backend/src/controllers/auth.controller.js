@@ -160,6 +160,10 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
     throw new ApiError(401, "Refresh token not recognized");
   }
 
+  user.refreshToken = user.refreshToken.filter(
+    (tokenEntry) => tokenEntry.token !== incomingRefreshToken,
+  );
+
   const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(
     user._id,
   );

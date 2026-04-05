@@ -5,18 +5,8 @@ import { User } from "../models/user.model.js";
 import { Ride } from "../models/ride.model.js";
 import { Booking } from "../models/booking.model.js";
 import { logger } from "../utils/logger.js";
+import { isOriginAllowed } from "../utils/cors.js";
 import jwt from "jsonwebtoken";
-
-const allowedOrigins = (process.env.CORS_ORIGIN || "")
-    .split(",")
-    .map((origin) => origin.trim())
-    .filter(Boolean);
-
-const isOriginAllowed = (origin) => {
-    if (!origin) return true;
-    if (!allowedOrigins.length || allowedOrigins.includes("*")) return true;
-    return allowedOrigins.includes(origin);
-};
 
 const connectedUsers = new Map();
 

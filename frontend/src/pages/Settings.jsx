@@ -1,7 +1,7 @@
 import { useEffect, useEffectEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AppShell from "../components/AppShell";
-import api from "../lib/api";
+import api, { clearAuthStorage } from "../lib/api";
 import StatusNotice from "../components/ui/StatusNotice";
 import "../pages/AppShell.css";
 
@@ -202,7 +202,7 @@ export default function Settings() {
           message: "Your account has been deactivated. Signing you out now.",
         });
         setModal(null);
-        localStorage.clear();
+        clearAuthStorage();
         navigate("/login");
         return;
       }

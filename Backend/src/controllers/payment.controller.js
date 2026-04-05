@@ -23,16 +23,8 @@ const initializeRazorpay = () => {
     });
 };
 
-const createOrder = asyncHandler(async (req, res) => {
-    const { bookingId, paymentMethod } = req.body;
-    assertObjectId(bookingId, "booking ID");
-    const normalizedPaymentMethod = requirePaymentMethod(paymentMethod);
-
-    if (normalizedPaymentMethod === "cash") {
-        throw new ApiError(400, "Cash payments do not require an online order");
-    }
-
-    const booking = await Booking.findOne({ _id: bookingId, passenger: req.user._id });
+const getOwnedBookingForPayment = async (bookingId, passengerId) => {
+    const booking = await Booking.findOne({ _id: bookingId, passenger: passengerId });
 
     if (!booking) {
         throw new ApiError(404, "Booking not found");
@@ -42,12 +34,26 @@ const createOrder = asyncHandler(async (req, res) => {
         throw new ApiError(400, "Cancelled bookings cannot be paid");
     }
 
-    if (booking.paymentStatus === "paid") {
-        throw new ApiError(400, "Booking is already paid");
+    if (booking.bookingStatus === "completed") {
+        throw new ApiError(400, "Completed bookings cannot start a new payment");
     }
 
-    if (booking.bookingStatus === "completed") {
-        throw new ApiError(400, "Completed bookings cannot start a new online payment");
+    return booking;
+};
+
+const createOrder = asyncHandler(async (req, res) => {
+    const { bookingId, paymentMethod } = req.body;
+    assertObjectId(bookingId, "booking ID");
+    const normalizedPaymentMethod = requirePaymentMethod(paymentMethod);
+
+    if (normalizedPaymentMethod === "cash") {
+        throw new ApiError(400, "Cash payments do not require an online order");
+    }
+
+    const booking = await getOwnedBookingForPayment(bookingId, req.user._id);
+
+    if (booking.paymentStatus === "paid") {
+        throw new ApiError(400, "Booking is already paid");
     }
 
     const normalizedAmount = parseNonNegativeNumber(booking.totalPrice, "booking amount");
@@ -98,6 +104,58 @@ const createOrder = asyncHandler(async (req, res) => {
             },
             "Order created successfully"
         )
+    );
+});
+
+const confirmCashPayment = asyncHandler(async (req, res) => {
+    const { bookingId } = req.body;
+
+    assertObjectId(bookingId, "booking ID");
+
+    const booking = await getOwnedBookingForPayment(bookingId, req.user._id);
+
+    if (booking.paymentStatus === "paid") {
+        throw new ApiError(400, "Booking is already paid");
+    }
+
+    const normalizedAmount = parseNonNegativeNumber(booking.totalPrice, "booking amount");
+    if (normalizedAmount === 0) {
+        throw new ApiError(400, "Booking amount must be greater than zero");
+    }
+
+    const payment = await Payment.findOneAndUpdate(
+        { booking: booking._id },
+        {
+            payer: req.user._id,
+            amount: normalizedAmount,
+            currency: "INR",
+            paymentMethod: "cash",
+            paymentStatus: "pending",
+            providerOrderId: undefined,
+            providerSignature: undefined,
+            transactionId: undefined,
+            paidAt: undefined,
+        },
+        {
+            new: true,
+            upsert: true,
+            setDefaultsOnInsert: true,
+        },
+    );
+
+    booking.paymentStatus = "unpaid";
+    await booking.save({ validateBeforeSave: false });
+
+    return res.status(200).json(
+        new ApiResponse(
+            200,
+            {
+                bookingId: booking._id,
+                paymentMethod: payment.paymentMethod,
+                paymentStatus: payment.paymentStatus,
+            },
+            "Cash payment reservation confirmed",
+        ),
     );
 });
 
@@ -204,5 +262,6 @@ const verifyPayment = asyncHandler(async (req, res) => {
 
 export {
     createOrder,
+    confirmCashPayment,
     verifyPayment
 };

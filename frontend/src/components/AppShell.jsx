@@ -17,7 +17,7 @@ import {
   Menu,
   X
 } from "lucide-react";
-import api, { API_URL } from "../lib/api";
+import api, { API_URL, REFRESH_TOKEN_KEY, clearAuthStorage } from "../lib/api";
 import { logger } from "../lib/logger";
 import "../pages/AppShell.css";
 
@@ -77,9 +77,7 @@ export default function AppShell({ children, title, role: initialRole = "passeng
       } catch (err) {
         logger.error("Failed to fetch sidebar data", err);
         if (err.status === 401) {
-          localStorage.removeItem("via-token");
-          localStorage.removeItem("via-user");
-          localStorage.removeItem("via-role");
+          clearAuthStorage();
           navigate("/login");
         }
       }
@@ -124,11 +122,23 @@ export default function AppShell({ children, title, role: initialRole = "passeng
     };
   }, [mobileNavOpen]);
 
-  const handleLogout = () => {
-    localStorage.removeItem("via-token");
-    localStorage.removeItem("via-user");
-    localStorage.removeItem("via-role");
-    navigate("/login");
+  const handleLogout = async () => {
+    const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
+
+    try {
+      if (refreshToken) {
+        await api.post(
+          "/api/v1/auth/logout",
+          { refreshToken },
+          { skipAuthRefresh: true },
+        );
+      }
+    } catch (error) {
+      logger.error("Logout request failed", error);
+    } finally {
+      clearAuthStorage();
+      navigate("/login");
+    }
   };
 
   const toggleRole = () => {

@@ -91,7 +91,14 @@ export default function Payment() {
     setError("");
 
     if (method === "cod") {
-      navigate(`/bookings/${bookingId}/payment/status?success=true&method=cod`);
+      setProcessing(true);
+      try {
+        await api.post("/api/v1/payments/confirm-cash", { bookingId });
+        navigate(`/bookings/${bookingId}/payment/status?success=true&method=cod`);
+      } catch (err) {
+        setError(err?.body?.message || err.message || "Unable to reserve cash payment.");
+        setProcessing(false);
+      }
       return;
     }
 
@@ -249,7 +256,7 @@ export default function Payment() {
           <div className="payment-card">
             <div className="info-card-title">Checkout Note</div>
             <p style={{ fontSize: "0.82rem", color: "var(--mist)", lineHeight: 1.7 }}>
-              The app now opens Razorpay with the backend-provided key and order details only. Any methods enabled in Razorpay for this device should appear there.
+              Razorpay is still being opened from the backend-generated test-mode order, so your current Razorpay sandbox setup keeps working. Cash reservations are now stored on the backend instead of only redirecting the UI.
             </p>
           </div>
 

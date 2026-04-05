@@ -247,11 +247,32 @@ const cancelBooking = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Completed bookings cannot be cancelled");
   }
 
+  const payment = await Payment.findOne({
+    booking: booking._id,
+    payer: req.user._id,
+  }).session(null);
+
+  if (payment?.paymentStatus === "success" || booking.paymentStatus === "paid") {
+    throw new ApiError(
+      400,
+      "Paid bookings cannot be cancelled automatically yet. Please add refund handling first.",
+    );
+  }
+
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
+    if (payment) {
+      payment.paymentStatus = "failed";
+      payment.paidAt = undefined;
+      payment.transactionId = undefined;
+      payment.providerSignature = undefined;
+      await payment.save({ validateBeforeSave: false, session });
+    }
+
     booking.bookingStatus = "cancelled";
+    booking.paymentStatus = "unpaid";
     await booking.save({ validateBeforeSave: false, session });
 
     await Ride.findByIdAndUpdate(booking.ride, {

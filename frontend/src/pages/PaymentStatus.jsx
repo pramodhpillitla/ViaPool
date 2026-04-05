@@ -38,7 +38,14 @@ export default function PaymentStatus() {
   const departure = booking?.ride?.departureTime
     ? new Date(booking.ride.departureTime)
     : null;
-  const isCashBooking = paymentMethod === "cod";
+  const backendPaymentMethod = booking?.payment?.paymentMethod;
+  const backendPaymentStatus = booking?.payment?.paymentStatus;
+  const isCashBooking = backendPaymentMethod === "cash" || paymentMethod === "cod";
+  const receiptPaymentStatus = isCashBooking
+    ? backendPaymentStatus === "pending"
+      ? "Pay at pickup"
+      : "Cash selected"
+    : booking?.paymentStatus || "unpaid";
   const heading = success
     ? isCashBooking
       ? "Booking Reserved"
@@ -142,7 +149,7 @@ export default function PaymentStatus() {
                 },
                 {
                   label: "Payment status",
-                  val: isCashBooking ? "Pay at pickup" : booking.paymentStatus,
+                  val: receiptPaymentStatus,
                 },
               ].map((row) => (
                 <div key={row.label} className="receipt-row">
