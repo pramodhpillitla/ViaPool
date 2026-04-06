@@ -17,7 +17,12 @@ import {
   Menu,
   X
 } from "lucide-react";
-import api, { API_URL, REFRESH_TOKEN_KEY, clearAuthStorage } from "../lib/api";
+import api, {
+  API_URL,
+  REFRESH_TOKEN_KEY,
+  USER_KEY,
+  clearAuthStorage,
+} from "../lib/api";
 import { logger } from "../lib/logger";
 import "../pages/AppShell.css";
 
@@ -41,6 +46,27 @@ const SHARED_LINKS = [
   { to: "/settings",       icon: Settings, label: "Settings" },
 ];
 
+function getCachedUser() {
+  try {
+    return JSON.parse(localStorage.getItem(USER_KEY) || "null");
+  } catch {
+    return null;
+  }
+}
+
+function canAccessDriverView(currentUser) {
+  const storedRole = localStorage.getItem("via-role");
+  const cachedUser = getCachedUser();
+
+  return Boolean(
+    currentUser?.role === "driver" ||
+      cachedUser?.role === "driver" ||
+      storedRole === "driver" ||
+      currentUser?.drivingLicense?.licenseNumber ||
+      currentUser?.drivingLicense?.licenseImage,
+  );
+}
+
 export default function AppShell({ children, title, role: initialRole = "passenger" }) {
   const navigate   = useNavigate();
   const location = useLocation();
@@ -55,10 +81,12 @@ export default function AppShell({ children, title, role: initialRole = "passeng
         const currentUserResponse = await api.get("/api/v1/auth/current-user");
         const currentUser = currentUserResponse.data;
         setUser(currentUser);
+        localStorage.setItem(USER_KEY, JSON.stringify(currentUser));
 
         const storedRole = localStorage.getItem("via-role");
+        const hasDriverAccess = canAccessDriverView(currentUser);
         const nextRole =
-          currentUser.role === "driver"
+          hasDriverAccess
             ? storedRole === "passenger"
               ? "passenger"
               : "driver"
@@ -142,7 +170,7 @@ export default function AppShell({ children, title, role: initialRole = "passeng
   };
 
   const toggleRole = () => {
-    if (user?.role !== "driver") {
+    if (!canAccessDriverView(user)) {
       return;
     }
 
@@ -185,7 +213,7 @@ export default function AppShell({ children, title, role: initialRole = "passeng
         <nav className="sidebar-nav">
           <div className="sidebar-section-container">
               <div className="sidebar-section-label">{role === "driver" ? "Driver" : "Passenger"} View</div>
-              {user?.role === "driver" ? (
+              {canAccessDriverView(user) ? (
                 <button className="role-switch-btn" onClick={toggleRole}>
                   <ArrowLeftRight size={14} />
                   Switch to {role === "driver" ? "Passenger" : "Driver"}
@@ -292,7 +320,7 @@ export default function AppShell({ children, title, role: initialRole = "passeng
           <nav className="mobile-nav-links">
             <div className="sidebar-section-container">
               <div className="sidebar-section-label">{role === "driver" ? "Driver" : "Passenger"} View</div>
-              {user?.role === "driver" ? (
+              {canAccessDriverView(user) ? (
                 <button className="role-switch-btn" onClick={toggleRole}>
                   <ArrowLeftRight size={14} />
                   Switch

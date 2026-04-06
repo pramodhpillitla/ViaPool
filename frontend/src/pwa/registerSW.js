@@ -7,5 +7,6 @@ export const updateServiceWorker = registerSW({
   },
   onNeedRefresh() {
     window.dispatchEvent(new CustomEvent('viapool:pwa-update'))
+    updateServiceWorker(true)
   },
 })
